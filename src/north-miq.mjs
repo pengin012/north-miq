@@ -239,6 +239,37 @@ function sleep(milliseconds) {
   return new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds));
 }
 
+function isRetryableCycleError(error) {
+  return error instanceof NorthApiError
+    && (error.code === "network_error" || [408, 429, 502, 503, 504].includes(error.status));
+}
+
+function retryDelayMilliseconds(intervalSeconds, failureCount) {
+  const base = Math.max(15, intervalSeconds) * 1000;
+  const multiplier = Math.min(2 ** Math.max(0, failureCount - 1), 10);
+  return Math.min(base * multiplier, 5 * 60 * 1000);
+}
+
+async function getAuthenticatedHandle(client, args) {
+  let failureCount = 0;
+  while (true) {
+    try {
+      const me = await client.getMe();
+      const botHandle = me?.user?.handle ?? me?.handle ?? BOT_HANDLE;
+      if (!/^[A-Za-z0-9_]{1,15}$/u.test(botHandle)) {
+        throw new Error("認証済みnorthアカウントのハンドルを確認できません。");
+      }
+      return botHandle;
+    } catch (error) {
+      if (args.once || !isRetryableCycleError(error)) throw error;
+      failureCount += 1;
+      const retryAfter = retryDelayMilliseconds(args.intervalSeconds, failureCount);
+      console.error(`[north-miq] 起動時の一時的な通信エラーです。${Math.ceil(retryAfter / 1000)}秒後に認証確認を再試行します: ${error.message}`);
+      await sleep(retryAfter);
+    }
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -252,16 +283,23 @@ async function main() {
     });
   }
   const client = createNorthClient({ sessionCookie });
-  const me = await client.getMe();
-  const botHandle = me?.user?.handle ?? me?.handle ?? BOT_HANDLE;
-  if (!/^[A-Za-z0-9_]{1,15}$/u.test(botHandle)) {
-    throw new Error("認証済みnorthアカウントのハンドルを確認できません。");
-  }
+  const botHandle = await getAuthenticatedHandle(client, args);
   console.log(`[north-miq] 認証済みアカウント: @${botHandle}`);
   const state = await loadState(args.statePath);
 
+  let failureCount = 0;
   do {
-    await runCycle(client, state, args, botHandle);
+    try {
+      await runCycle(client, state, args, botHandle);
+      failureCount = 0;
+    } catch (error) {
+      if (args.once || !isRetryableCycleError(error)) throw error;
+      failureCount += 1;
+      const retryAfter = retryDelayMilliseconds(args.intervalSeconds, failureCount);
+      console.error(`[north-miq] 一時的な通信エラーです。${Math.ceil(retryAfter / 1000)}秒後に再試行します: ${error.message}`);
+      await sleep(retryAfter);
+      continue;
+    }
     if (args.once) break;
     await sleep(args.intervalSeconds * 1000);
   } while (true);
@@ -279,10 +317,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 export {
   fetchRecentNotifications,
   isActionableMention,
+  getAuthenticatedHandle,
   loadState,
   notificationKey,
   parseArgs,
   processNotification,
+  retryDelayMilliseconds,
   replyPayload,
   saveState,
 };

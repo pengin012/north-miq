@@ -49,6 +49,8 @@ npm.cmd run miq -- --once --process-existing
 npm.cmd run miq -- --interval 30
 ```
 
+常時監視中の一時的な通信エラー（起動時の認証確認、ネットワーク、429、5xx）はプロセスを終了せず、バックオフして再試行します。認証エラーや設定エラーは停止して原因を表示します。
+
 ## 投稿モード
 
 投稿モードは、ローカル環境変数 `NORTH_SESSION_COOKIE`、`NORTH_SESSION_COOKIE_FILE`、またはセットアップが作る `data/north-session.cookie` と、明示的な `--post --confirm-public` が必要です。

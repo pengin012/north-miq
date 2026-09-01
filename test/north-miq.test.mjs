@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isActionableMention, notificationKey, parseArgs, replyPayload } from "../src/north-miq.mjs";
+import { isActionableMention, notificationKey, parseArgs, replyPayload, retryDelayMilliseconds } from "../src/north-miq.mjs";
 
 test("only a mention with a parent post is actionable", () => {
   assert.equal(isActionableMention({
@@ -39,4 +39,10 @@ test("notification keys are stable and CLI defaults to dry-run", () => {
   const args = parseArgs(["--once", "--process-existing"]);
   assert.equal(args.once, true);
   assert.equal(args.post, false);
+});
+
+test("retry delay backs off but stays bounded for transient failures", () => {
+  assert.equal(retryDelayMilliseconds(30, 1), 30_000);
+  assert.equal(retryDelayMilliseconds(30, 2), 60_000);
+  assert.equal(retryDelayMilliseconds(30, 99), 300_000);
 });
