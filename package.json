@@ -1,13 +1,13 @@
 {
-  "name": "north-miq-poc",
+  "name": "north-fx-api",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "north.rip Make it a quote proof of concept",
+  "description": "Unofficial FxTwitter-style compatibility gateway for north.rip",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pengin012/north-miq.git"
+    "url": "https://github.com/pengin012/north-fx-api.git"
   },
   "overrides": {
     "uuid": "^11.1.1"
@@ -18,9 +18,10 @@
   "scripts": {
     "poc": "node north-poc.mjs",
     "miq": "node src/north-miq.mjs",
+    "gateway": "node src/north-gateway.mjs",
     "session:setup": "node src/north-session-setup.mjs",
-    "test": "node --test test/*.test.mjs",
-    "check": "node --check north-poc.mjs && node --check src/north-api.mjs && node --check src/miq-image.mjs && node --check src/north-miq.mjs && node --check src/north-session-setup.mjs"
+    "test": "node --test --test-concurrency=2 test/*.test.mjs",
+    "check": "node --check north-poc.mjs && node --check src/north-api.mjs && node --check src/north-fx-compat.mjs && node --check src/north-gateway.mjs && node --check src/miq-image.mjs && node --check src/north-miq.mjs && node --check src/north-session-setup.mjs"
   },
   "dependencies": {
     "makeitaquote": "^11.4.0",

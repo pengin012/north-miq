@@ -75,7 +75,7 @@ test("avatar fetch retries a temporary 404 with a cache-busting query", async ()
   const avatar = await client.fetchNorthImage("/media/avatar.png");
   assert.equal(avatar.toString(), "avatar");
   assert.equal(calls, 2);
-  assert.equal(new URL(urls[1]).searchParams.get("north_miq_avatar_retry"), "1");
+  assert.ok(urls.some((url) => new URL(url).searchParams.get("north_fx_avatar_retry") === "1"));
 });
 
 test("successful avatar bytes are cached within the client", async () => {
@@ -93,4 +93,37 @@ test("successful avatar bytes are cached within the client", async () => {
   await client.fetchNorthImage("/media/avatar.png");
   await client.fetchNorthImage("/media/avatar.png");
   assert.equal(calls, 1);
+});
+
+test("identical avatar reads are coalesced while the first request is pending", async () => {
+  let calls = 0;
+  const client = createNorthClient({
+    avatarRetries: 0,
+    fetchImpl: async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return new Response(Buffer.from("avatar"), {
+        status: 200,
+        headers: { "content-type": "image/png", "content-length": "6" },
+      });
+    },
+  });
+  const [first, second] = await Promise.all([
+    client.fetchNorthImage("/media/avatar.png"),
+    client.fetchNorthImage("/media/avatar.png"),
+  ]);
+  assert.equal(first.toString(), "avatar");
+  assert.equal(second.toString(), "avatar");
+  assert.equal(calls, 1);
+});
+
+test("upstream JSON responses have a bounded size", async () => {
+  const client = createNorthClient({
+    maxResponseBytes: 4,
+    fetchImpl: async () => response(200, { ok: true }),
+  });
+  await assert.rejects(
+    client.getHealth(),
+    (error) => error instanceof NorthApiError && error.code === "response_too_large" && error.status === 200,
+  );
 });

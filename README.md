@@ -1,71 +1,83 @@
-# north / Make it a quote PoC
+# north-fx-api
 
-公開northポストの読み取りと、Botアカウント（現在は表示名 `Make it a quote`、ハンドル `@miq`）へのメンションを起点にしたMIQ画像生成を行うPoCです。画像は公式のMake it a Quote互換レンダラーのdarkテーマを使い、Discord版に近い黒背景・カラーアイコン・引用文・名前/ハンドルの構成で生成します。
+Unofficial FxTwitter-style compatibility API for [north.rip](https://north.rip/).
 
-このプロジェクトはnorth.rip、Discord、Make it a Quoteの運営元とは無関係です。northの公開Web APIは公式Bot APIとして公開されたものではないため、利用規約・運営の許可・仕様変更を確認したうえで使用してください。
+This project is a local-first gateway around north's web API. It is not affiliated with north.rip, X, FxTwitter, FxEmbed, Discord, or Make it a Quote. north's API is not documented as an official public developer API; use it only with permission and at a conservative request rate.
 
-## 安全なドライラン
+## What it provides
 
-```powershell
-npm.cmd run poc -- https://north.rip/1145141919810/status/2094508520291435125 --text "PoC引用テスト"
-```
+The gateway normalizes north responses into stable, FxTwitter v2-style JSON envelopes:
 
-既定では公開APIへの読み取りだけを行い、投稿リクエストは送信しません。
+- `GET /2/status/:id`
+- `GET /2/status/:id/thread`
+- `GET /2/thread/:id` / `GET /2/conversation/:id`
+- `GET /2/status/:id/replies`
+- `GET /2/status/:id/quotes`
+- `GET /2/status/:id/likes`
+- `GET /2/status/:id/reposts` (and `retweets` alias)
+- `GET /2/user/:handle` / `GET /2/profile/:handle`
+- `GET /2/user/:handle/tweets` / `GET /2/profile/:handle/statuses`
+- `GET /2/user/:handle/media` / `GET /2/profile/:handle/media`
+- `GET /2/profile/:handle/followers`
+- `GET /2/profile/:handle/following`
+- `GET /2/search?q=...`
+- `GET /2/trends`
+- `GET /2/typeahead?q=...`
+- `GET /2/timeline/public`
+- `GET /2/notifications/mentions`
+- `GET /2/notifications/unread-count`
+- `GET /oembed?url=https://north.rip/<handle>/status/<id>`
+- `GET /v1/events/mentions` (SSE, backed by conservative polling)
 
-## メンション監視とMIQ生成
+The existing MIQ worker remains available as `npm.cmd run miq`. Optional write support is exposed separately as `POST /v1/quotes` and is disabled unless explicitly enabled.
 
-ChromeのCookieを手でコピーせず、Bot専用のローカルブラウザプロファイルを使ってセッションを準備できます。
+## Stability model
 
-```powershell
-npm.cmd install
-npm.cmd run session:setup
-```
+- GET requests use bounded retries for transient network and upstream errors.
+- POST requests are never blindly retried because a lost response can mean the post was already created.
+- In-flight identical GETs are coalesced and successful responses are briefly cached.
+- The response body and avatar size are bounded, and avatar reads are coalesced too.
+- Upstream concurrency and request spacing are limited.
+- The cache and upstream wait queue have fixed maximum sizes.
+- The mention event stream polls the cheap unread-count endpoint first and fetches the full mention page only when needed.
+- It refreshes the full mention page at most every 30 seconds unless the unread count changes.
+- MIQ rendering never downloads fonts during a request; it uses the local font cache or host fonts.
+- The gateway binds to `127.0.0.1` by default. Set a gateway token before binding it to another interface.
 
-開いたChromeで `@make_it_a_quote` に手動ログインしてください。Cookieの値は表示せず、`data/north-session.cookie` にだけ保存します。
-
-Cloudflareがこの自動操作ブラウザをブロックする場合は、`session:setup` を繰り返さないでください。現在ログイン済みの通常ChromeでDevToolsのNetworkからnorthのリクエストを「Copy as cURL」し、cURL内の `Cookie:` の後ろの値だけを、次のローカルファイルへ保存します。Cookie値をチャットへ貼らないでください。
-
-```powershell
-notepad "data\north-session.cookie"
-```
-
-保存後は、セットアップと同じように `npm.cmd run miq -- --once` でセッションを確認できます。`401` ならCookieのコピーを確認し、`403` が続く場合はNode.jsからの直接利用がCloudflareに拒否されている状態なので、通常Chromeを維持したブラウザ接続方式へ切り替えます。
-
-セッション準備後、まずドライランで実行します。
-
-```powershell
-npm.cmd run miq -- --once --process-existing
-```
-
-この処理は、Botアカウントへのメンション通知を読み、返信元の `inReplyToId` を親ポストとして取得します。親ポストの本文とnorth内の投稿者アイコンからPNGを生成し、`data/miq-previews/` に保存します。起動時に認証済みアカウントのハンドルをnorth APIから確認します。
-
-初回起動時は既存通知を基準点として保存し、過去のメンションを勝手に処理しません。過去分も確認したい場合だけ `--process-existing` を指定してください。
-
-ドライランでは新しい通知を処理済みにしないため、プレビューを確認した後、同じ通知を `--post --confirm-public` で投稿できます。
-
-常時監視は最低15秒、既定30秒です。
-
-```powershell
-npm.cmd run miq -- --interval 30
-```
-
-常時監視中の一時的な通信エラー（起動時の認証確認、ネットワーク、429、5xx）はプロセスを終了せず、バックオフして再試行します。認証エラーや設定エラーは停止して原因を表示します。
-
-## 投稿モード
-
-投稿モードは、ローカル環境変数 `NORTH_SESSION_COOKIE`、`NORTH_SESSION_COOKIE_FILE`、またはセットアップが作る `data/north-session.cookie` と、明示的な `--post --confirm-public` が必要です。
-Cookieはパスワード相当として扱い、チャットへの貼り付け・Gitへのコミット・ログ出力をしないでください。
+## Run locally
 
 ```powershell
-npm.cmd run miq -- --once --process-existing --post --confirm-public
+npm.cmd ci
+npm.cmd run gateway
 ```
 
-投稿すると、Botはメンションされた返信に対して、生成したMIQ画像を添付して返信します。既定ではnorthのネイティブ引用ではなく、MIQ画像として返します。
+Public read endpoints work without a session. Mentions, SSE events, and writes require a session read from `NORTH_SESSION_COOKIE`, `NORTH_SESSION_COOKIE_FILE`, or the ignored default file `data/north-session.cookie`.
 
-このセットアップは現在使っているChromeのプロファイルを読みません。別プロファイルで一度だけログインします。常時運用には、north運営が提供する公式Bot/API認証、またはこの専用セッション方式が必要です。
+```powershell
+curl.exe http://127.0.0.1:8787/health
+curl.exe http://127.0.0.1:8787/2/status/2094605508622157083
+curl.exe "http://127.0.0.1:8787/2/search?q=north"
+curl.exe -N http://127.0.0.1:8787/v1/events/mentions
+```
 
-## OSSセキュリティ
+For write access, set both values locally and keep the gateway on loopback:
 
-`.env`、Cookie、ブラウザプロファイル、セッションファイル、生成画像、依存パッケージはGit管理対象外です。セッションやCookieをIssue、Pull Request、ログ、スクリーンショットへ貼り付けないでください。
+```powershell
+$env:NORTH_GATEWAY_ALLOW_WRITES = "1"
+$env:NORTH_GATEWAY_TOKEN = "use-a-local-secret"
+npm.cmd run gateway
+```
 
-設定項目の名前だけは [.env.example](.env.example) にあります。実値はローカル環境で設定してください。
+Do not commit session cookies, passwords, gateway tokens, browser profiles, generated images, or `.env` files.
+
+## Development
+
+```powershell
+npm.cmd run check
+npm.cmd test
+npm.cmd audit --omit=dev
+```
+
+## License
+
+MIT. See [LICENSE](LICENSE).

@@ -24,7 +24,10 @@ async function renderMiqPng({
   const username = normalizeHandle(handle);
   const name = cleanText(displayName) || username;
   const quoteText = cleanText(text) || "（本文なし）";
-  const builder = new MiQ()
+  // The gateway must remain usable when Google Fonts/CDNs are unavailable.
+  // The project keeps any optional font cache locally; otherwise the renderer
+  // falls back to fonts installed on the host instead of blocking a request.
+  const builder = new MiQ({ autoFont: false })
     .setTheme({ extends: "dark", avatar: { grayscale: false } })
     .setText(quoteText)
     .setUsername(username)
