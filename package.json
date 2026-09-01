@@ -7,7 +7,7 @@
   "description": "north.rip Make it a quote proof of concept",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yuta843/north-miq.git"
+    "url": "https://github.com/pengin012/north-miq.git"
   },
   "overrides": {
     "uuid": "^11.1.1"
