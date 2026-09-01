@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isActionableMention, notificationKey, parseArgs, replyPayload, retryDelayMilliseconds } from "../src/north-miq.mjs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { NorthApiError } from "../src/north-api.mjs";
+import { isActionableMention, notificationKey, parseArgs, replyPayload, retryDelayMilliseconds, runCycle } from "../src/north-miq.mjs";
 
 test("only a mention with a parent post is actionable", () => {
   assert.equal(isActionableMention({
@@ -45,4 +49,31 @@ test("retry delay backs off but stays bounded for transient failures", () => {
   assert.equal(retryDelayMilliseconds(30, 1), 30_000);
   assert.equal(retryDelayMilliseconds(30, 2), 60_000);
   assert.equal(retryDelayMilliseconds(30, 99), 300_000);
+});
+
+test("runCycle marks a missing parent as seen so it is not retried", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "north-miq-state-test-"));
+  const statePath = join(directory, "state.json");
+  const notification = {
+    id: "notification-gone-parent",
+    kind: "MENTION",
+    tweet: { id: "mention-gone-parent", inReplyToId: "parent-gone", author: { handle: "requester" } },
+  };
+  const state = { initialized: true, seen: [] };
+  const args = { post: false, processExisting: false, statePath };
+  const client = {
+    getNotifications: async () => ({ items: [notification], nextCursor: null }),
+    getTweet: async () => {
+      throw new NorthApiError("ポストがありません", { status: 404, code: "tweet_not_found" });
+    },
+  };
+
+  try {
+    await runCycle(client, state, args, "miq");
+    assert.deepEqual(state.seen, [notification.id]);
+    const saved = JSON.parse(await readFile(statePath, "utf8"));
+    assert.deepEqual(saved.seen, [notification.id]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

@@ -96,6 +96,22 @@ test("a missing north avatar falls back without logging an icon error", async ()
   }
 });
 
+test("a missing parent post is skipped instead of retried forever", async () => {
+  const notification = {
+    id: "notification-missing-parent",
+    kind: "MENTION",
+    tweet: { id: "mention-missing-parent", inReplyToId: "parent-gone", author: { handle: "requester" } },
+  };
+  const client = {
+    origin: "https://north.rip",
+    getTweet: async () => {
+      throw new NorthApiError("ポストがありません", { status: 404, code: "tweet_not_found" });
+    },
+  };
+  const result = await processNotification(client, notification, { post: false });
+  assert.deepEqual(result, { status: "skipped", reason: "親ポストが存在しません" });
+});
+
 test("a live-mode mention uploads the MIQ and replies to the mention", async () => {
   const previewDirectory = await mkdtemp(join(tmpdir(), "north-miq-test-"));
   const previousPreviewDirectory = process.env.NORTH_MIQ_PREVIEW_DIR;

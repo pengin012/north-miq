@@ -151,7 +151,15 @@ async function processNotification(client, notification, args, botHandle = BOT_H
     return { status: "skipped", reason: "メンションへの返信元ポストがありません" };
   }
 
-  const parent = await client.getTweet(mentionTweet.inReplyToId);
+  let parent;
+  try {
+    parent = await client.getTweet(mentionTweet.inReplyToId);
+  } catch (error) {
+    if (error instanceof NorthApiError && error.status === 404) {
+      return { status: "skipped", reason: "親ポストが存在しません" };
+    }
+    throw error;
+  }
   if (!parent || parent.deleted || parent.unavailable) {
     return { status: "skipped", reason: "親ポストが削除済みまたは表示不可です" };
   }
@@ -229,7 +237,7 @@ async function runCycle(client, state, args, botHandle = BOT_HANDLE) {
       const result = await processNotification(client, notification, args, botHandle);
       console.log(`[north-miq] ${JSON.stringify(result)}`);
       state.initialized = true;
-      if (args.post) {
+      if (args.post || result.status === "skipped") {
         state.seen.push(key);
         state.seen = state.seen.slice(-MAX_SEEN_IDS);
       }
@@ -328,6 +336,7 @@ export {
   parseArgs,
   processNotification,
   retryDelayMilliseconds,
+  runCycle,
   replyPayload,
   saveState,
 };
