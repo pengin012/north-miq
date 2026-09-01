@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+*.session.json
+*.storage-state.json
+*.cookie
+data/
+node_modules/
+.makeitaquote/

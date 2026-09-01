@@ -1,0 +1,29 @@
+{
+  "name": "north-miq-poc",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "north.rip Make it a quote proof of concept",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yuta843/north-miq.git"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "poc": "node north-poc.mjs",
+    "miq": "node src/north-miq.mjs",
+    "session:setup": "node src/north-session-setup.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check north-poc.mjs && node --check src/north-api.mjs && node --check src/miq-image.mjs && node --check src/north-miq.mjs && node --check src/north-session-setup.mjs"
+  },
+  "dependencies": {
+    "makeitaquote": "^11.4.0",
+    "playwright": "^1.55.0"
+  }
+}
