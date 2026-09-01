@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { chromium } from "playwright";
 
 const ORIGIN = process.env.NORTH_ORIGIN ?? "https://north.rip";
-const EXPECTED_HANDLE = (process.env.NORTH_BOT_HANDLE ?? "make_it_a_quote").replace(/^@/u, "");
+const EXPECTED_HANDLE = (process.env.NORTH_BOT_HANDLE ?? "miq").replace(/^@/u, "");
 const PROFILE_DIR = resolve(process.env.NORTH_BROWSER_PROFILE_DIR ?? "data/north-browser-profile");
 const SESSION_FILE = resolve(process.env.NORTH_SESSION_COOKIE_FILE ?? "data/north-session.cookie");
 const LOGIN_TIMEOUT_MS = 10 * 60 * 1000;

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createNorthClient, NorthApiError } from "./north-api.mjs";
 import { renderMiqPng } from "./miq-image.mjs";
 
-const BOT_HANDLE = process.env.NORTH_BOT_HANDLE ?? "make_it_a_quote";
+const BOT_HANDLE = process.env.NORTH_BOT_HANDLE ?? "miq";
 const DEFAULT_INTERVAL_SECONDS = 30;
 const MAX_NOTIFICATION_PAGES = 5;
 const MAX_SEEN_IDS = 500;
@@ -102,12 +102,12 @@ function notificationKey(notification) {
   return String(notification?.id ?? `${notification?.kind ?? "unknown"}:${notification?.tweet?.id ?? "unknown"}`);
 }
 
-function isActionableMention(notification) {
+function isActionableMention(notification, botHandle = BOT_HANDLE) {
   const tweet = notification?.tweet;
   return notification?.kind === "MENTION"
     && Boolean(tweet?.id)
     && Boolean(tweet?.inReplyToId)
-    && tweet?.author?.handle !== BOT_HANDLE;
+    && tweet?.author?.handle !== botHandle;
 }
 
 function parentSourceUrl(client, parent) {
@@ -145,9 +145,9 @@ async function writePreview(png, parentId) {
   return path;
 }
 
-async function processNotification(client, notification, args) {
+async function processNotification(client, notification, args, botHandle = BOT_HANDLE) {
   const mentionTweet = notification.tweet;
-  if (!isActionableMention(notification)) {
+  if (!isActionableMention(notification, botHandle)) {
     return { status: "skipped", reason: "メンションへの返信元ポストがありません" };
   }
 
@@ -199,7 +199,7 @@ async function processNotification(client, notification, args) {
   };
 }
 
-async function runCycle(client, state, args) {
+async function runCycle(client, state, args, botHandle = BOT_HANDLE) {
   const notifications = await fetchRecentNotifications(client);
   if (!state.initialized && !args.processExisting) {
     state.seen = notifications.map(notificationKey).slice(-MAX_SEEN_IDS);
@@ -221,7 +221,7 @@ async function runCycle(client, state, args) {
   for (const notification of pending) {
     const key = notificationKey(notification);
     try {
-      const result = await processNotification(client, notification, args);
+      const result = await processNotification(client, notification, args, botHandle);
       console.log(`[north-miq] ${JSON.stringify(result)}`);
       state.initialized = true;
       if (args.post) {
@@ -252,10 +252,16 @@ async function main() {
     });
   }
   const client = createNorthClient({ sessionCookie });
+  const me = await client.getMe();
+  const botHandle = me?.user?.handle ?? me?.handle ?? BOT_HANDLE;
+  if (!/^[A-Za-z0-9_]{1,15}$/u.test(botHandle)) {
+    throw new Error("認証済みnorthアカウントのハンドルを確認できません。");
+  }
+  console.log(`[north-miq] 認証済みアカウント: @${botHandle}`);
   const state = await loadState(args.statePath);
 
   do {
-    await runCycle(client, state, args);
+    await runCycle(client, state, args, botHandle);
     if (args.once) break;
     await sleep(args.intervalSeconds * 1000);
   } while (true);

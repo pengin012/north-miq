@@ -116,6 +116,10 @@ function createNorthClient({
     return (await request(`/api/tweets/${tweetId}`)).body;
   }
 
+  async function getMe() {
+    return (await request("/api/auth/me", { auth: true })).body;
+  }
+
   async function getNotifications({ tab = "mentions", cursor = null } = {}) {
     const query = new URLSearchParams({ tab });
     if (cursor) query.set("cursor", cursor);
@@ -185,6 +189,7 @@ function createNorthClient({
 
   return {
     origin: baseOrigin,
+    getMe,
     getTweet,
     getNotifications,
     uploadMedia,

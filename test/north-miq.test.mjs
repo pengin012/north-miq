@@ -18,6 +18,11 @@ test("only a mention with a parent post is actionable", () => {
     kind: "REPLY",
     tweet: { id: "t3", inReplyToId: "parent", author: { handle: "requester" } },
   }), false);
+  assert.equal(isActionableMention({
+    id: "n4",
+    kind: "MENTION",
+    tweet: { id: "t4", inReplyToId: "parent", author: { handle: "miq" } },
+  }, "miq"), false);
 });
 
 test("reply payload addresses the requester and attaches the MIQ", () => {

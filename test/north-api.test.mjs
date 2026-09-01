@@ -26,6 +26,20 @@ test("notification polling uses the mentions tab and session cookie", async () =
   assert.equal(seenHeaders.cookie, "fixture_cookie=ok");
 });
 
+test("getMe uses the authenticated session", async () => {
+  let seenPath = "";
+  const client = createNorthClient({
+    sessionCookie: "fixture_cookie=ok",
+    fetchImpl: async (url) => {
+      seenPath = new URL(url).pathname;
+      return response(200, { user: { handle: "miq" } });
+    },
+  });
+  const me = await client.getMe();
+  assert.equal(seenPath, "/api/auth/me");
+  assert.equal(me.user.handle, "miq");
+});
+
 test("createTweet requires a session", async () => {
   const client = createNorthClient({ fetchImpl: async () => response(200, {}) });
   await assert.rejects(

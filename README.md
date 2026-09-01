@@ -1,6 +1,6 @@
 # north / Make it a quote PoC
 
-公開northポストの読み取りと、`@make_it_a_quote` へのメンションを起点にしたMIQ画像生成を行うPoCです。画像は公式のMake it a Quote互換レンダラーのdarkテーマを使い、Discord版に近い黒背景・カラーアイコン・引用文・名前/ハンドルの構成で生成します。
+公開northポストの読み取りと、Botアカウント（現在は表示名 `Make it a quote`、ハンドル `@miq`）へのメンションを起点にしたMIQ画像生成を行うPoCです。画像は公式のMake it a Quote互換レンダラーのdarkテーマを使い、Discord版に近い黒背景・カラーアイコン・引用文・名前/ハンドルの構成で生成します。
 
 このプロジェクトはnorth.rip、Discord、Make it a Quoteの運営元とは無関係です。northの公開Web APIは公式Bot APIとして公開されたものではないため、利用規約・運営の許可・仕様変更を確認したうえで使用してください。
 
@@ -37,7 +37,7 @@ notepad "data\north-session.cookie"
 npm.cmd run miq -- --once --process-existing
 ```
 
-この処理は、`@make_it_a_quote` へのメンション通知を読み、返信元の `inReplyToId` を親ポストとして取得します。親ポストの本文とnorth内の投稿者アイコンからPNGを生成し、`data/miq-previews/` に保存します。
+この処理は、Botアカウントへのメンション通知を読み、返信元の `inReplyToId` を親ポストとして取得します。親ポストの本文とnorth内の投稿者アイコンからPNGを生成し、`data/miq-previews/` に保存します。起動時に認証済みアカウントのハンドルをnorth APIから確認します。
 
 初回起動時は既存通知を基準点として保存し、過去のメンションを勝手に処理しません。過去分も確認したい場合だけ `--process-existing` を指定してください。
 
