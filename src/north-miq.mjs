@@ -157,11 +157,14 @@ async function processNotification(client, notification, args, botHandle = BOT_H
   }
 
   let avatarBuffer = null;
+  let avatarStatus = "missing";
   if (parent.author?.avatarUrl) {
+    avatarStatus = "unavailable";
     try {
       avatarBuffer = await client.fetchNorthImage(parent.author.avatarUrl);
+      avatarStatus = "ok";
     } catch (error) {
-      console.warn(`[north-miq] アイコン取得をスキップ: ${error instanceof Error ? error.message : String(error)}`);
+      avatarStatus = error instanceof NorthApiError && error.status === 404 ? "not_found" : "unavailable";
     }
   }
 
@@ -183,6 +186,7 @@ async function processNotification(client, notification, args, botHandle = BOT_H
       parentAuthor: parent.author?.handle ?? null,
       previewPath,
       mediaCount: Array.isArray(parent.media) ? parent.media.length : 0,
+      avatarStatus,
     };
   }
 
@@ -196,6 +200,7 @@ async function processNotification(client, notification, args, botHandle = BOT_H
     parentAuthor: parent.author?.handle ?? null,
     createdId: created?.id ?? null,
     previewPath,
+    avatarStatus,
   };
 }
 
