@@ -690,7 +690,7 @@ async function main() {
   if (!loopbackHosts.has(host) && !token) throw new Error("外部bindにはNORTH_GATEWAY_TOKENが必要です。");
   const sessionCookie = await readSessionCookie();
   const gateway = createGateway({
-    client: createNorthClient({ origin: process.env.NORTH_ORIGIN ?? undefined, sessionCookie }),
+    client: createNorthClient({ sessionCookie }),
     sessionAvailable: Boolean(sessionCookie),
     token,
     allowWrites: process.env.NORTH_GATEWAY_ALLOW_WRITES === "1",

@@ -295,7 +295,7 @@ async function main() {
       code: "missing_session",
     });
   }
-  const client = createNorthClient({ origin: process.env.NORTH_ORIGIN ?? undefined, sessionCookie });
+  const client = createNorthClient({ sessionCookie });
   const botHandle = await getAuthenticatedHandle(client, args);
   console.log(`[north-miq] 認証済みアカウント: @${botHandle}`);
   const state = await loadState(args.statePath);
