@@ -55,3 +55,42 @@ test("avatar fetch rejects non-north origins", async () => {
     (error) => error instanceof NorthApiError && error.code === "external_avatar_url",
   );
 });
+
+test("avatar fetch retries a temporary 404 with a cache-busting query", async () => {
+  let calls = 0;
+  const urls = [];
+  const client = createNorthClient({
+    avatarRetries: 1,
+    avatarRetryDelayMs: 0,
+    fetchImpl: async (url) => {
+      calls += 1;
+      urls.push(String(url));
+      if (calls === 1) return new Response("missing", { status: 404 });
+      return new Response(Buffer.from("avatar"), {
+        status: 200,
+        headers: { "content-type": "image/png", "content-length": "6" },
+      });
+    },
+  });
+  const avatar = await client.fetchNorthImage("/media/avatar.png");
+  assert.equal(avatar.toString(), "avatar");
+  assert.equal(calls, 2);
+  assert.equal(new URL(urls[1]).searchParams.get("north_miq_avatar_retry"), "1");
+});
+
+test("successful avatar bytes are cached within the client", async () => {
+  let calls = 0;
+  const client = createNorthClient({
+    avatarRetries: 0,
+    fetchImpl: async () => {
+      calls += 1;
+      return new Response(Buffer.from("avatar"), {
+        status: 200,
+        headers: { "content-type": "image/png", "content-length": "6" },
+      });
+    },
+  });
+  await client.fetchNorthImage("/media/avatar.png");
+  await client.fetchNorthImage("/media/avatar.png");
+  assert.equal(calls, 1);
+});

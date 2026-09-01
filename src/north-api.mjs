@@ -2,6 +2,10 @@ const DEFAULT_ORIGIN = "https://north.rip";
 const DEFAULT_USER_AGENT = "north-miq-bot/0.1";
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const DEFAULT_AVATAR_RETRIES = 3;
+const DEFAULT_AVATAR_RETRY_DELAY_MS = 1_000;
+const AVATAR_CACHE_TTL_MS = 15 * 60 * 1000;
+const MAX_CACHED_AVATARS = 32;
 
 class NorthApiError extends Error {
   constructor(message, { status = 0, code = "unknown", fields = null } = {}) {
@@ -37,18 +41,27 @@ function makeAbortSignal(timeoutMs) {
   return typeof AbortSignal?.timeout === "function" ? AbortSignal.timeout(timeoutMs) : undefined;
 }
 
+function sleep(milliseconds) {
+  return milliseconds > 0 ? new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds)) : Promise.resolve();
+}
+
 function createNorthClient({
   origin = DEFAULT_ORIGIN,
   sessionCookie = null,
   fetchImpl = globalThis.fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxImageBytes = DEFAULT_MAX_IMAGE_BYTES,
+  avatarRetries = DEFAULT_AVATAR_RETRIES,
+  avatarRetryDelayMs = DEFAULT_AVATAR_RETRY_DELAY_MS,
   userAgent = DEFAULT_USER_AGENT,
 } = {}) {
   if (typeof fetchImpl !== "function") throw new Error("fetchが利用できません。");
 
   const baseOrigin = normalizeOrigin(origin);
   const cookie = sessionCookie ? String(sessionCookie).trim() : "";
+  const retries = Number.isInteger(avatarRetries) && avatarRetries >= 0 ? avatarRetries : DEFAULT_AVATAR_RETRIES;
+  const retryDelay = Number.isFinite(avatarRetryDelayMs) && avatarRetryDelayMs >= 0 ? avatarRetryDelayMs : DEFAULT_AVATAR_RETRY_DELAY_MS;
+  const avatarCache = new Map();
 
   async function request(path, {
     method = "GET",
@@ -154,17 +167,36 @@ function createNorthClient({
       throw new NorthApiError("north内のアイコンだけを読み込めます。", { code: "external_avatar_url" });
     }
 
+    const cacheKey = url.toString();
+    const cached = avatarCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return Buffer.from(cached.bytes);
+    if (cached) avatarCache.delete(cacheKey);
+
     let response;
-    try {
-      response = await fetchImpl(url, {
-        headers: { accept: "image/*", "user-agent": userAgent },
-        redirect: "error",
-        signal: makeAbortSignal(timeoutMs),
-      });
-    } catch (error) {
-      throw new NorthApiError(`アイコンの取得に失敗しました: ${error instanceof Error ? error.message : String(error)}`, {
-        code: "avatar_network_error",
-      });
+    let attempt = 0;
+    while (true) {
+      const requestUrl = new URL(url);
+      if (attempt > 0) requestUrl.searchParams.set("north_miq_avatar_retry", String(attempt));
+      try {
+        response = await fetchImpl(requestUrl, {
+          headers: { accept: "image/*", "user-agent": userAgent },
+          redirect: "error",
+          signal: makeAbortSignal(timeoutMs),
+        });
+      } catch (error) {
+        if (attempt < retries) {
+          attempt += 1;
+          await sleep(retryDelay * attempt);
+          continue;
+        }
+        throw new NorthApiError(`アイコンの取得に失敗しました: ${error instanceof Error ? error.message : String(error)}`, {
+          code: "avatar_network_error",
+        });
+      }
+      if (response.status !== 404 || attempt >= retries) break;
+      await response.body?.cancel?.();
+      attempt += 1;
+      await sleep(retryDelay * attempt);
     }
     if (!response.ok) throw new NorthApiError(`アイコンの取得に失敗しました（HTTP ${response.status}）。`, {
       status: response.status,
@@ -184,6 +216,8 @@ function createNorthClient({
     if (bytes.length === 0 || bytes.length > maxImageBytes) {
       throw new NorthApiError("投稿者アイコンのサイズが不正です。", { code: "avatar_too_large" });
     }
+    avatarCache.set(cacheKey, { bytes: Buffer.from(bytes), expiresAt: Date.now() + AVATAR_CACHE_TTL_MS });
+    while (avatarCache.size > MAX_CACHED_AVATARS) avatarCache.delete(avatarCache.keys().next().value);
     return bytes;
   }
 
